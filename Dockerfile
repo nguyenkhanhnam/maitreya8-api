@@ -47,9 +47,9 @@ COPY --chown=appuser:appuser app.py .
 # 6. Switch to the non-root user
 USER appuser
 
-# Expose the port
+# Expose the correct port
 EXPOSE 3000
 
 # Set the command to run your API inside a virtual screen environment
-CMD ["xvfb-run", "python3", "-u", "app.py"]
-# CMD ["python3", "-u", "app.py"]
+# Use 'python', not 'python3', to ensure the venv interpreter is used.
+CMD ["xvfb-run", "python", "-u", "app.py"]

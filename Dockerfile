@@ -3,7 +3,7 @@ FROM debian:13-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies, INCLUDING xvfb and curl
+# Install system dependencies, INCLUDING xvfb, curl, AND xauth
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
@@ -12,6 +12,7 @@ RUN apt-get update && \
     python3-venv \
     xvfb \
     curl \
+    xauth \
     ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
@@ -50,4 +51,4 @@ USER appuser
 EXPOSE 5000
 
 # Set the command to run your API inside a virtual screen environment
-CMD ["xvfb-run", "python", "-u", "app.py"]
+CMD ["xvfb-run", "python", "-u", "app.py"]```

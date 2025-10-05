@@ -50,6 +50,5 @@ USER appuser
 # Expose the correct port
 EXPOSE 3000
 
-# Set the command to run your API inside a virtual screen environment
-# Use 'python', not 'python3', to ensure the venv interpreter is used.
-CMD ["xvfb-run", "python", "-u", "app.py"]
+# Set the command to run your API using the SHELL FORM
+CMD xvfb-run python -u app.py

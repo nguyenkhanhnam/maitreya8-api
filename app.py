@@ -9,6 +9,32 @@ import sys
 
 app = Flask(__name__)
 
+# --- NEW HELPER FUNCTION TO CLEAN THE OUTPUT ---
+def extract_csv_from_output(raw_output: str) -> str | None:
+    """
+    Finds and extracts only the 'Vedic Planets' CSV data from the tool's raw output.
+    """
+    lines = raw_output.strip().split('\n')
+    csv_data_lines = []
+    found_header = False
+    header_start = 'Planet;'
+
+    for line in lines:
+        if line.strip().startswith(header_start):
+            found_header = True
+        
+        if found_header:
+            # The table ends with a blank line
+            if not line.strip():
+                break
+            csv_data_lines.append(line)
+
+    if not csv_data_lines:
+        return None
+    
+    return "\n".join(csv_data_lines)
+# ---------------------------------------------
+
 @app.route('/healthz')
 def healthz():
     """A simple health check endpoint."""
@@ -58,26 +84,36 @@ def get_vedic_planets():
         elif output_format == 'plain-html':
             command.append('--plain-html')
 
-        # --- THE FINAL FIX: Remove check=True to ignore the program's error code ---
-        result = subprocess.run(
-            command, capture_output=True, text=True # <--- check=True is now GONE
-        )
-        # ------------------------------------------------------------------------
+        result = subprocess.run(command, capture_output=True, text=True)
 
-        # Now we process the result, which we have accepted even with the error code
-        if output_format == 'json':
-            # The csv.DictReader is smart enough to find the header and ignore the error lines
-            csv_file = io.StringIO(result.stdout)
-            reader = csv.DictReader(csv_file, delimiter=';') # <--- Specify the semicolon delimiter
-            planets_list = [row for row in reader]
-            return jsonify(planets_list)
+        # --- REFACTORED LOGIC ---
+        # For JSON and CSV, we need the clean data.
+        if output_format in ['json', 'csv']:
+            clean_csv = extract_csv_from_output(result.stdout)
+            
+            if not clean_csv:
+                return jsonify({
+                    "error": "Could not find parseable CSV data in the Maitreya output.",
+                    "raw_output": result.stdout
+                }), 500
+
+            if output_format == 'json':
+                csv_file = io.StringIO(clean_csv)
+                reader = csv.DictReader(csv_file, delimiter=';')
+                planets_list = [row for row in reader]
+                return jsonify(planets_list)
+            
+            elif output_format == 'csv':
+                return Response(clean_csv, mimetype='text/csv')
+
+        # For other formats, return the full, raw output as it's more descriptive.
         else:
             content_type_map = {
-                'csv': 'text/csv', 'html': 'text/html',
-                'plain-html': 'text/html', 'text': 'text/plain'
+                'html': 'text/html',
+                'plain-html': 'text/html',
+                'text': 'text/plain'
             }
             mimetype = content_type_map.get(output_format, 'text/plain')
-            # Return the raw output, including the harmless error message at the top
             return Response(result.stdout, mimetype=mimetype)
 
     except Exception as e:

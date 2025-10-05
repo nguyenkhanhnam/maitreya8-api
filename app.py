@@ -5,7 +5,7 @@ import csv
 import io
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-import sys # <--- IMPORT SYS FOR LOGGING
+import sys
 
 app = Flask(__name__)
 
@@ -42,7 +42,9 @@ def get_vedic_planets():
             return jsonify({"error": f"Invalid IANA timezone specified: '{timezone}'"}), 400
 
         local_date_time = f"{date} {time}:00"
-        location_string = f"API_Location {latitude} {longitude} {offset_string}"
+        
+        # --- THE FINAL FIX: Swap longitude and latitude order ---
+        location_string = f"API_Location {longitude} {latitude} {offset_string}"
 
         command = [
             "maitreya8t",
@@ -57,8 +59,7 @@ def get_vedic_planets():
             command.append('--html')
         elif output_format == 'plain-html':
             command.append('--plain-html')
-
-        # --- NEW: Log the command before executing it ---
+        
         print(f"Executing command: {command}", file=sys.stderr)
         sys.stderr.flush()
 
@@ -80,13 +81,10 @@ def get_vedic_planets():
             return Response(result.stdout, mimetype=mimetype)
 
     except subprocess.CalledProcessError as e:
-        # --- NEW: Log everything about the failure ---
         print(f"Maitreya command failed with exit code: {e.returncode}", file=sys.stderr)
         print(f"Stdout: {e.stdout}", file=sys.stderr)
         print(f"Stderr: {e.stderr}", file=sys.stderr)
         sys.stderr.flush()
-
-        # --- NEW: Return a much more detailed error message in the JSON ---
         return jsonify({
             "error": "Maitreya CLI command failed.",
             "return_code": e.returncode,

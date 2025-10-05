@@ -51,4 +51,4 @@ USER appuser
 EXPOSE 3000
 
 # Set the command to run your API inside a virtual screen environment
-CMD ["xvfb-run", "python", "-u", "app.py"]```
+CMD ["xvfb-run", "python", "-u", "app.py"]

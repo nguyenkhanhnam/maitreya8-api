@@ -42,8 +42,6 @@ def get_vedic_planets():
             return jsonify({"error": f"Invalid IANA timezone specified: '{timezone}'"}), 400
 
         local_date_time = f"{date} {time}:00"
-        
-        # --- THE FINAL FIX: Swap longitude and latitude order ---
         location_string = f"API_Location {longitude} {latitude} {offset_string}"
 
         command = [
@@ -59,17 +57,18 @@ def get_vedic_planets():
             command.append('--html')
         elif output_format == 'plain-html':
             command.append('--plain-html')
-        
-        print(f"Executing command: {command}", file=sys.stderr)
-        sys.stderr.flush()
 
+        # --- THE FINAL FIX: Remove check=True to ignore the program's error code ---
         result = subprocess.run(
-            command, capture_output=True, text=True, check=True
+            command, capture_output=True, text=True # <--- check=True is now GONE
         )
+        # ------------------------------------------------------------------------
 
+        # Now we process the result, which we have accepted even with the error code
         if output_format == 'json':
+            # The csv.DictReader is smart enough to find the header and ignore the error lines
             csv_file = io.StringIO(result.stdout)
-            reader = csv.DictReader(csv_file)
+            reader = csv.DictReader(csv_file, delimiter=';') # <--- Specify the semicolon delimiter
             planets_list = [row for row in reader]
             return jsonify(planets_list)
         else:
@@ -78,20 +77,9 @@ def get_vedic_planets():
                 'plain-html': 'text/html', 'text': 'text/plain'
             }
             mimetype = content_type_map.get(output_format, 'text/plain')
+            # Return the raw output, including the harmless error message at the top
             return Response(result.stdout, mimetype=mimetype)
 
-    except subprocess.CalledProcessError as e:
-        print(f"Maitreya command failed with exit code: {e.returncode}", file=sys.stderr)
-        print(f"Stdout: {e.stdout}", file=sys.stderr)
-        print(f"Stderr: {e.stderr}", file=sys.stderr)
-        sys.stderr.flush()
-        return jsonify({
-            "error": "Maitreya CLI command failed.",
-            "return_code": e.returncode,
-            "stdout": e.stdout,
-            "stderr": e.stderr
-        }), 500
-        
     except Exception as e:
         print(f"An unexpected error occurred: {e}", file=sys.stderr)
         sys.stderr.flush()

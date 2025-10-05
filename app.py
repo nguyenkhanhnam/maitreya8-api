@@ -43,4 +43,4 @@ def get_vedic_planets():
 
 if __name__ == '__main__':
     # Flask runs on port 5000 by default inside the container
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=3000)

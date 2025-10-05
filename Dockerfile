@@ -3,13 +3,14 @@ FROM debian:13-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies, including the 'python3-venv' package
+# Install system dependencies, INCLUDING xvfb
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
     python3 \
     python3-pip \
     python3-venv \
+    xvfb \
     ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
@@ -35,7 +36,6 @@ RUN chown -R appuser:appuser /home/appuser
 ENV PATH="/home/appuser/venv/bin:$PATH"
 
 # 4. Copy requirements file and install dependencies into the venv
-# This is done as the root user before switching to the appuser
 COPY --chown=appuser:appuser requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -48,5 +48,5 @@ USER appuser
 # Expose the port
 EXPOSE 5000
 
-# Set the command to run your API using the python from the venv
-CMD ["python", "-u", "app.py"]
+# Set the command to run your API inside a virtual screen environment
+CMD ["xvfb-run", "python", "-u", "app.py"]

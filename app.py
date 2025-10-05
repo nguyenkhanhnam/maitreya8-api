@@ -4,6 +4,11 @@ import json
 
 app = Flask(__name__)
 
+@app.route('/healthz')
+def healthz():
+    """A simple health check endpoint."""
+    return jsonify({"status": "ok"}), 200
+
 @app.route('/api/vedicplanets', methods=['GET'])
 def get_vedic_planets():
     date = request.args.get('date')

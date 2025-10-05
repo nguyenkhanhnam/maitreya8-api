@@ -48,7 +48,7 @@ COPY --chown=appuser:appuser app.py .
 USER appuser
 
 # Expose the port
-EXPOSE 5000
+EXPOSE 3000
 
 # Set the command to run your API inside a virtual screen environment
 CMD ["xvfb-run", "python", "-u", "app.py"]```

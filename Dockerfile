@@ -1,10 +1,9 @@
-# Use the official Debian 13 (Trixie) slim image for a smaller footprint
+# Use the official Debian 13 (Trixie) slim image
 FROM debian:13-slim
 
-# Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies needed to download and install the package, plus Python for our API
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
@@ -13,27 +12,30 @@ RUN apt-get update && \
     ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Set the URL for the Maitreya Debian package
+# Install Maitreya package
 ARG MAITREYA_URL=https://github.com/martin-pe/maitreya8/releases/download/v8.2/maitreya8_8.2_debian13_amd64.deb
-
-# Download and install the Maitreya .deb package
 RUN wget -O /tmp/maitreya.deb ${MAITREYA_URL} && \
     apt-get update && \
     apt-get install -y /tmp/maitreya.deb && \
     rm /tmp/maitreya.deb && \
     rm -rf /var/lib/apt/lists/*
 
-# Set up the working directory for our API
+# --- Python Application Setup (The Improved Part) ---
+
+# Set the working directory
 WORKDIR /app
 
-# Copy your Flask API application code into the image
+# 1. Copy only the requirements file first
+COPY requirements.txt .
+
+# 2. Install the Python dependencies (this step will be cached)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 3. Copy the rest of your application code
 COPY app.py .
 
-# Install Flask
-RUN pip install --no-cache-dir Flask
-
-# Expose the port the app runs on
+# Expose the port
 EXPOSE 5000
 
-# Set the command to run your API when the container starts
+# Set the command to run your API
 CMD ["python3", "-u", "app.py"]

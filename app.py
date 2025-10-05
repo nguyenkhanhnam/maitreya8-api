@@ -1,6 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response # <--- IMPORT Response
 import subprocess
 import json
+import csv
+import io
 
 app = Flask(__name__)
 
@@ -11,42 +13,69 @@ def healthz():
 
 @app.route('/api/vedicplanets', methods=['GET'])
 def get_vedic_planets():
+    # --- Step 1: Get all parameters, including the new 'format' parameter ---
     date = request.args.get('date')
     time = request.args.get('time')
     latitude = request.args.get('lat')
     longitude = request.args.get('lon')
     timezone = request.args.get('tz')
+    
+    # Default to 'json' if the format parameter is not provided
+    output_format = request.args.get('format', 'json').lower()
+
+    # --- Step 2: Validate the requested format ---
+    valid_formats = ['json', 'csv', 'html', 'plain-html', 'text']
+    if output_format not in valid_formats:
+        return jsonify({"error": f"Invalid format specified. Valid formats are: {', '.join(valid_formats)}"}), 400
 
     if not all([date, time, latitude, longitude, timezone]):
         return jsonify({"error": "Missing required parameters: date, time, lat, lon, tz"}), 400
 
     try:
-        # --- CHANGE 1: Combine date and time into a single string ---
-        # We add ":00" for the seconds to match the required format.
         local_date_time = f"{date} {time}:00"
-
-        # --- CHANGE 2: Combine location info into a single string ---
-        # The name "API_Location" is just a placeholder.
         location_string = f"API_Location {latitude} {longitude} {timezone}"
 
-        # --- CHANGE 3: Build the command with the correct flags ---
+        # --- Step 3: Build the command, adding the correct format flag ---
         command = [
             "maitreya8t",
             "--ldate", local_date_time,
             "--location", location_string,
             "--vedicplanets",
-            "--output=json"
         ]
-        
+
+        # Determine the flag needed for the subprocess based on the desired output
+        # For JSON output, we need to request CSV from the tool to parse it.
+        if output_format in ['json', 'csv']:
+            command.append('--csv')
+        elif output_format == 'html':
+            command.append('--html')
+        elif output_format == 'plain-html':
+            command.append('--plain-html')
+        # If 'text', we add no flag, as it's the default.
+
         result = subprocess.run(
             command, capture_output=True, text=True, check=True
         )
-        json_output = [json.loads(line) for line in result.stdout.strip().split('\n')]
+
+        # --- Step 4: Process and return the data in the requested format ---
         
-        if len(json_output) == 1:
-            return jsonify(json_output[0])
+        # If the user wants JSON, we parse the CSV and convert it.
+        if output_format == 'json':
+            csv_file = io.StringIO(result.stdout)
+            reader = csv.DictReader(csv_file)
+            planets_list = [row for row in reader]
+            return jsonify(planets_list)
+        
+        # For all other formats, we return the raw text with the correct Content-Type.
         else:
-            return jsonify(json_output)
+            content_type_map = {
+                'csv': 'text/csv',
+                'html': 'text/html',
+                'plain-html': 'text/html',
+                'text': 'text/plain'
+            }
+            mimetype = content_type_map[output_format]
+            return Response(result.stdout, mimetype=mimetype)
 
     except subprocess.CalledProcessError as e:
         return jsonify({"error": "Maitreya CLI command failed.", "stderr": e.stderr}), 500
@@ -54,5 +83,4 @@ def get_vedic_planets():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # Using port 3000 as configured
     app.run(host='0.0.0.0', port=3000)

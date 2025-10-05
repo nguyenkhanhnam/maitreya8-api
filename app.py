@@ -21,11 +21,23 @@ def get_vedic_planets():
         return jsonify({"error": "Missing required parameters: date, time, lat, lon, tz"}), 400
 
     try:
+        # --- CHANGE 1: Combine date and time into a single string ---
+        # We add ":00" for the seconds to match the required format.
+        local_date_time = f"{date} {time}:00"
+
+        # --- CHANGE 2: Combine location info into a single string ---
+        # The name "API_Location" is just a placeholder.
+        location_string = f"API_Location {latitude} {longitude} {timezone}"
+
+        # --- CHANGE 3: Build the command with the correct flags ---
         command = [
-            "maitreya8t", "--date", date, "--time", time,
-            "--latitude", latitude, "--longitude", longitude,
-            "--timezone", timezone, "--vedicplanets", "--output=json"
+            "maitreya8t",
+            "--ldate", local_date_time,
+            "--location", location_string,
+            "--vedicplanets",
+            "--output=json"
         ]
+        
         result = subprocess.run(
             command, capture_output=True, text=True, check=True
         )
@@ -42,5 +54,5 @@ def get_vedic_planets():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # Flask runs on port 5000 by default inside the container
+    # Using port 3000 as configured
     app.run(host='0.0.0.0', port=3000)

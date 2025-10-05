@@ -1,54 +1,58 @@
-# Use the official Debian 13 (Trixie) slim image
-FROM debian:13-slim
+from flask import Flask, request, jsonify
+import subprocess
+import json
 
-ENV DEBIAN_FRONTEND=noninteractive
+app = Flask(__name__)
 
-# Install system dependencies, INCLUDING xvfb, curl, AND xauth
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    wget \
-    python3 \
-    python3-pip \
-    python3-venv \
-    xvfb \
-    curl \
-    xauth \
-    ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+@app.route('/healthz')
+def healthz():
+    """A simple health check endpoint."""
+    return jsonify({"status": "ok"}), 200
 
-# Install Maitreya package
-ARG MAITREYA_URL=https://github.com/martin-pe/maitreya8/releases/download/v8.2/maitreya8_8.2_debian13_amd64.deb
-RUN wget -O /tmp/maitreya.deb ${MAITREYA_URL} && \
-    apt-get update && \
-    apt-get install -y /tmp/maitreya.deb && \
-    rm /tmp/maitreya.deb && \
-    rm -rf /var/lib/apt/lists/*
+@app.route('/api/vedicplanets', methods=['GET'])
+def get_vedic_planets():
+    date = request.args.get('date')
+    time = request.args.get('time')
+    latitude = request.args.get('lat')
+    longitude = request.args.get('lon')
+    timezone = request.args.get('tz')
 
-# --- Python Application Setup (Best Practice) ---
+    if not all([date, time, latitude, longitude, timezone]):
+        return jsonify({"error": "Missing required parameters: date, time, lat, lon, tz"}), 400
 
-# 1. Create a non-root user to run the application
-RUN useradd --create-home appuser
-WORKDIR /home/appuser/app
+    try:
+        # --- CHANGE 1: Combine date and time into a single string ---
+        # We add ":00" for the seconds to match the required format.
+        local_date_time = f"{date} {time}:00"
 
-# 2. Create and own the virtual environment
-RUN python3 -m venv /home/appuser/venv
-RUN chown -R appuser:appuser /home/appuser
+        # --- CHANGE 2: Combine location info into a single string ---
+        # The name "API_Location" is just a placeholder.
+        location_string = f"API_Location {latitude} {longitude} {timezone}"
 
-# 3. Activate the virtual environment by adding it to the PATH
-ENV PATH="/home/appuser/venv/bin:$PATH"
+        # --- CHANGE 3: Build the command with the correct flags ---
+        command = [
+            "maitreya8t",
+            "--ldate", local_date_time,
+            "--location", location_string,
+            "--vedicplanets",
+            "--output=json"
+        ]
+        
+        result = subprocess.run(
+            command, capture_output=True, text=True, check=True
+        )
+        json_output = [json.loads(line) for line in result.stdout.strip().split('\n')]
+        
+        if len(json_output) == 1:
+            return jsonify(json_output[0])
+        else:
+            return jsonify(json_output)
 
-# 4. Copy requirements file and install dependencies into the venv
-COPY --chown=appuser:appuser requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": "Maitreya CLI command failed.", "stderr": e.stderr}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-# 5. Copy the application code
-COPY --chown=appuser:appuser app.py .
-
-# 6. Switch to the non-root user
-USER appuser
-
-# Expose the correct port
-EXPOSE 3000
-
-# Set the command to run your API using the SHELL FORM
-CMD xvfb-run python -u app.py
+if __name__ == '__main__':
+    # Using port 3000 as configured
+    app.run(host='0.0.0.0', port=3000)

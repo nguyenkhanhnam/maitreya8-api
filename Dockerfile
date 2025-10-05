@@ -3,12 +3,13 @@ FROM debian:13-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies
+# Install system dependencies, including the 'python3-venv' package
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
     python3 \
     python3-pip \
+    python3-venv \
     ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
@@ -20,22 +21,32 @@ RUN wget -O /tmp/maitreya.deb ${MAITREYA_URL} && \
     rm /tmp/maitreya.deb && \
     rm -rf /var/lib/apt/lists/*
 
-# --- Python Application Setup (The Improved Part) ---
+# --- Python Application Setup (Best Practice) ---
 
-# Set the working directory
-WORKDIR /app
+# 1. Create a non-root user to run the application
+RUN useradd --create-home appuser
+WORKDIR /home/appuser/app
 
-# 1. Copy only the requirements file first
-COPY requirements.txt .
+# 2. Create and own the virtual environment
+RUN python3 -m venv /home/appuser/venv
+RUN chown -R appuser:appuser /home/appuser
 
-# 2. Install the Python dependencies (this step will be cached)
+# 3. Activate the virtual environment by adding it to the PATH
+ENV PATH="/home/appuser/venv/bin:$PATH"
+
+# 4. Copy requirements file and install dependencies into the venv
+# This is done as the root user before switching to the appuser
+COPY --chown=appuser:appuser requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Copy the rest of your application code
-COPY app.py .
+# 5. Copy the application code
+COPY --chown=appuser:appuser app.py .
+
+# 6. Switch to the non-root user
+USER appuser
 
 # Expose the port
 EXPOSE 5000
 
-# Set the command to run your API
-CMD ["python3", "-u", "app.py"]
+# Set the command to run your API using the python from the venv
+CMD ["python", "-u", "app.py"]

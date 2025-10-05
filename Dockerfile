@@ -49,11 +49,5 @@ USER appuser
 # Expose the port
 EXPOSE 5000
 
-# --- HEALTHCHECK INSTRUCTION (with longer start-period) ---
-# This tells Docker to wait 45 seconds after start before the first check.
-# HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-#  CMD curl -f http://localhost:5000/healthz || exit 1
-# -----------------------------------------------------------
-
 # Set the command to run your API inside a virtual screen environment
 CMD ["xvfb-run", "python", "-u", "app.py"]

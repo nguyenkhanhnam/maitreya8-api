@@ -15,59 +15,52 @@ def healthz():
 
 @app.route('/api/vedicplanets', methods=['GET'])
 def get_vedic_planets():
+    # Get all possible location parameters
+    city = request.args.get('city')
     date = request.args.get('date')
     time = request.args.get('time')
     latitude = request.args.get('lat')
     longitude = request.args.get('lon')
-    timezone = request.args.get('tz')
+    timezone = request.args.get('tz') # Only used for manual lat/lon
     output_format = request.args.get('format', 'json').lower()
 
-    if not all([date, time, latitude, longitude, timezone]):
-        return jsonify({"error": "Missing required parameters: date, time, lat, lon, tz"}), 400
+    if not date or not time:
+        return jsonify({"error": "Missing required parameters: date, time"}), 400
 
+    location_string = ""
     try:
-        try:
+        # --- NEW, SIMPLIFIED LOGIC ---
+        if city:
+            # If a city is provided, we pass it directly to the tool.
+            location_string = city
+        elif all([latitude, longitude, timezone]):
+            # If manual coordinates are provided, we build the complex string.
             naive_dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
             tz_info = ZoneInfo(timezone)
             offset = naive_dt.astimezone(tz_info).utcoffset()
             offset_decimal = offset.total_seconds() / 3600.0
-        except ZoneInfoNotFoundError:
-            return jsonify({"error": f"Invalid IANA timezone specified: '{timezone}'"}), 400
+            location_string = f"API_Location {longitude} {latitude} {offset_decimal}"
+        else:
+            return jsonify({"error": "Missing location parameters. Provide either 'city' or all of 'lat', 'lon', and 'tz'."}), 400
+        # --------------------------------
 
         local_date_time = f"{date} {time}:00"
-        location_string = f"API_Location {longitude} {latitude} {offset_decimal}"
-
+        
+        # Build the command using the determined location string
         command = ["maitreya8t", "--ldate", local_date_time, "--location", location_string, "--vedicplanets"]
 
         if output_format in ['json', 'csv']: command.append('--csv')
         elif output_format == 'html': command.append('--html')
         elif output_format == 'plain-html': command.append('--plain-html')
 
-        # We do not use check=True, so we can inspect the result ourselves.
         result = subprocess.run(command, capture_output=True, text=True)
 
-        # --- THE BEST PRACTICE: INTELLIGENT ERROR HANDLING ---
-        # We expect return code 0 (true success) or 255 (known bug on success).
-        # Any other return code is a REAL, UNEXPECTED error.
         if result.returncode not in [0, 255]:
-            # Log the unexpected error for debugging.
-            print(f"Maitreya command failed with UNEXPECTED exit code: {result.returncode}", file=sys.stderr)
-            print(f"Command executed: {' '.join(command)}", file=sys.stderr)
-            print(f"Stdout: {result.stdout}", file=sys.stderr)
-            print(f"Stderr: {result.stderr}", file=sys.stderr)
-            sys.stderr.flush()
-            
-            # Return a detailed error to the API user.
             return jsonify({
                 "error": "Maitreya CLI command failed with an unexpected error.",
-                "return_code": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr
+                "return_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr
             }), 500
-        # --------------------------------------------------------
 
-        # If we reach here, it's a success (either code 0 or 255).
-        # The output from the tool is clean because our inputs are correct.
         if output_format == 'json':
             csv_file = io.StringIO(result.stdout)
             reader = csv.DictReader(csv_file, delimiter=';')
@@ -81,7 +74,6 @@ def get_vedic_planets():
             return Response(result.stdout, mimetype=mimetype)
 
     except Exception as e:
-        # This catches Python errors, not subprocess errors.
         print(f"An unexpected Python error occurred: {e}", file=sys.stderr)
         return jsonify({"error": str(e)}), 500
 
